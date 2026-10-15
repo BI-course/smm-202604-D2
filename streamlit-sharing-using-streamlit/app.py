@@ -5,42 +5,65 @@ import pandas as pd
 import os
 
 # -----------------------------------------------------------------------
-# Load all four persisted artifacts ONCE, at module import time. Streamlit
-# re-runs this whole script top-to-bottom on every widget interaction, so
-# @st.cache_resource keeps joblib.load() from re-reading the files from
-# disk on every single click -- without it, every tab switch and every
-# form submission would reload all four artifacts again.
+# Load all four persisted artifacts once. Streamlit re-runs this script on
+# every widget interaction, so @st.cache_resource stops joblib.load() from
+# re-reading the files on every click.
 # -----------------------------------------------------------------------
 @st.cache_resource
 def load_artifacts():
-    # regression_pipeline = joblib.load("lasso_regressor_for_sme_revenue.joblib")
-    # classification_pipeline = joblib.load("svc_classifier_for_sme_credit_risk.joblib")
-    # clustering_artifact = joblib.load("kmeans_mall_customer_segmentation.joblib")
-    # arm_artifact = joblib.load("apriori_recommendation_rules.joblib")
     MODEL_DIR = "./model"
 
     regression_pipeline = joblib.load(
         os.path.join(MODEL_DIR, "lasso_regressor_for_sme_revenue.joblib")
     )
-
     classification_pipeline = joblib.load(
         os.path.join(MODEL_DIR, "svc_classifier_for_sme_credit_risk.joblib")
     )
-
     clustering_artifact = joblib.load(
         os.path.join(MODEL_DIR, "kmeans_mall_customer_segmentation.joblib")
     )
-
     arm_artifact = joblib.load(
         os.path.join(MODEL_DIR, "apriori_recommendation_rules.joblib")
     )
     return regression_pipeline, classification_pipeline, clustering_artifact, arm_artifact
+
 
 regression_pipeline, classification_pipeline, clustering_artifact, arm_artifact = load_artifacts()
 clustering_scaler = clustering_artifact["scaler"]
 clustering_kmeans = clustering_artifact["kmeans"]
 recommendation_lookup = arm_artifact["recommendation_lookup"]
 sku_lookup = arm_artifact["sku_lookup"]
+
+
+# -----------------------------------------------------------------------
+# Read the categories each pipeline's encoder learned during training.
+# The dropdowns below use these lists, so users can only pick values the
+# model has seen. Any other value would make predict() fail.
+# -----------------------------------------------------------------------
+def get_categories(pipeline):
+    categories = {}
+    for _, step in pipeline.steps:
+        if hasattr(step, "transformers_"):
+            for _, transformer, columns in step.transformers_:
+                encoder = transformer.steps[-1][1] if hasattr(transformer, "steps") else transformer
+                if hasattr(encoder, "categories_"):
+                    for column, values in zip(columns, encoder.categories_):
+                        categories[column] = [str(v) for v in values]
+    return categories
+
+
+def pick(label, categories, column, default, key):
+    """Dropdown built from the trained categories. Falls back to a text box
+    only if the column was not found in the encoder."""
+    options = categories.get(column)
+    if options:
+        index = options.index(default) if default in options else 0
+        return st.selectbox(label, options, index=index, key=key)
+    return st.text_input(label, default, key=key)
+
+
+reg_cats = get_categories(regression_pipeline)
+clf_cats = get_categories(classification_pipeline)
 
 st.set_page_config(page_title="BBT 4206 Model Validation Demos", page_icon="\U0001F4CA", layout="centered")
 st.title("BBT 4206 -- Model Validation Demos")
@@ -55,16 +78,13 @@ tab_regression, tab_classification, tab_clustering, tab_arm = st.tabs([
 # -----------------------------------------------------------------------
 with tab_regression:
     with st.form("regression_form"):
-        sector = st.text_input("Sector", "Technology")
-        county = st.text_input("County", "Nairobi")
-        quarter = st.text_input("Quarter", "Q3")
+        sector = pick("Sector", reg_cats, "sector", "Technology", "reg_sector")
+        county = pick("County", reg_cats, "county", "Nairobi", "reg_county")
+        quarter = pick("Quarter", reg_cats, "quarter", "Q3", "reg_quarter")
         business_age_years = st.number_input("Business Age (years)", value=4.5)
         num_employees = st.number_input("Number of Employees", value=12)
-        # These four categories are the exact set the pipeline's
-        # OrdinalEncoder was fitted on.
-        owner_education_level = st.selectbox(
-            "Owner Education Level",
-            ["Primary", "Secondary", "Tertiary", "Postgraduate"], index=1)
+        owner_education_level = pick(
+            "Owner Education Level", reg_cats, "owner_education_level", "Secondary", "reg_edu")
         monthly_marketing_spend_kes = st.number_input("Monthly Marketing Spend (KES)", value=45000)
         avg_daily_foot_traffic = st.number_input(
             "Avg Daily Foot Traffic (leave 0 if not applicable)", value=0)
@@ -99,13 +119,12 @@ with tab_regression:
 # -----------------------------------------------------------------------
 with tab_classification:
     with st.form("classification_form"):
-        sector2 = st.text_input("Sector", "Retail")
-        county2 = st.text_input("County", "Nairobi")
-        quarter2 = st.text_input("Quarter", "Q2")
-        loan_purpose = st.text_input("Loan Purpose", "Working Capital")
-        owner_education_level2 = st.selectbox(
-            "Owner Education Level",
-            ["Primary", "Secondary", "Tertiary", "Postgraduate"], index=1, key="oel2")
+        sector2 = pick("Sector", clf_cats, "sector", "Retail", "clf_sector")
+        county2 = pick("County", clf_cats, "county", "Nairobi", "clf_county")
+        quarter2 = pick("Quarter", clf_cats, "quarter", "Q2", "clf_quarter")
+        loan_purpose = pick("Loan Purpose", clf_cats, "loan_purpose", "Working Capital", "clf_purpose")
+        owner_education_level2 = pick(
+            "Owner Education Level", clf_cats, "owner_education_level", "Secondary", "oel2")
         business_age_years2 = st.number_input("Business Age (years)", value=2.1, key="bay2")
         num_employees2 = st.number_input("Number of Employees", value=4, key="ne2")
         monthly_revenue_kes = st.number_input("Monthly Revenue (KES)", value=850000)

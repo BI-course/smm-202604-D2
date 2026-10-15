@@ -157,14 +157,8 @@
   </div>
 
 <script>
-  const protocol = window.location.protocol;                 // "http:", "https:", or "file:"
-  const hostname = window.location.hostname || "127.0.0.1";  // hostname is "" for a file:// page
-  const isSecure = protocol === "https:";
 
-  const API_ORIGIN = `${isSecure ? "https" : "http"}://${hostname}:${isSecure ? "443" : "5000"}`;
-  const API_URL = `${API_ORIGIN}/api/v1/models/mall-customer-segmenter/predictions`;
-
-  // const API_URL = "http://127.0.0.1:5000/api/v1/models/mall-customer-segmenter/predictions";
+   const API_URL = "http://127.0.0.1:5000/api/v1/models/mall-customer-segmenter/predictions";
 
   // Business-facing profile for each cluster id the K-Means model can
   // return. This is reference material for a decision maker, so it only
@@ -238,7 +232,7 @@
     } catch (err) {
       result.className = "show err";
       result.textContent = "Request failed: " + err.message +
-        ` (is api.py running and reachable at ${API_ORIGIN} ?)`;
+        " (is the Nginx server running?)";
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Assign Segment";
