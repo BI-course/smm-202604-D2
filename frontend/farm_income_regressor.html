@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farm Income Regressor</title>
+<style>
+  :root {
+    --accent: #4f46e5;
+    --accent-dark: #4338ca;
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok-bg: #eef2ff;
+    --err-bg: #fef2f2;
+    --err-text: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+    max-width: 560px;
+    width: 100%;
+    padding: 32px 32px 28px;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 16px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .back-link:hover { color: var(--accent); }
+  .badge {
+    display: inline-block;
+    background: var(--ok-bg);
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 16px 0 6px;
+    color: var(--text);
+  }
+  label .hint { font-weight: 400; color: var(--muted); }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    background: #fff;
+    color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.15);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px 16px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { background: #a5a6f6; cursor: default; }
+  #result {
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    display: none;
+  }
+  #result.show { display: block; }
+  #result.ok { background: var(--ok-bg); color: var(--accent-dark); }
+  #result.err { background: var(--err-bg); color: var(--err-text); }
+  #result .figure { font-size: 22px; font-weight: 700; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <a class="back-link" href="/">← Back to Home</a>
+    <div class="badge">Regression Model</div>
+    <h1>Farm Income Predictor</h1>
+    <p class="lead">Enter the farm details below to estimate its annual income in Kenyan shillings.</p>
+
+    <form id="predictForm">
+      <div class="row">
+        <div>
+          <label for="years_farming_experience">Years of Farming Experience</label>
+          <input type="number" id="years_farming_experience" min="0" step="any" required placeholder="e.g. 10">
+        </div>
+        <div>
+          <label for="soil_quality_score">Soil Quality Score <span class="hint">(0 or blank if unknown)</span></label>
+          <input type="number" id="soil_quality_score" min="0" step="any" placeholder="e.g. 60">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="num_workers_employed">Number of Workers Employed</label>
+          <input type="number" id="num_workers_employed" min="0" step="1" required placeholder="e.g. 1">
+        </div>
+        <div>
+          <label for="rainfall_mm">Rainfall (mm)</label>
+          <input type="number" id="rainfall_mm" min="0" step="any" required placeholder="e.g. 1345">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="market_distance_km">Market Distance (km)</label>
+          <input type="number" id="market_distance_km" min="0" step="any" required placeholder="e.g. 5.7">
+        </div>
+        <div>
+          <label for="farm_size_acres">Farm Size (acres)</label>
+          <input type="number" id="farm_size_acres" min="0" step="any" required placeholder="e.g. 7.26">
+        </div>
+      </div>
+
+      <label for="irrigation_maintenance_cost_kes">Irrigation Maintenance Cost (KES) <span class="hint">(blank or 0 if none)</span></label>
+      <input type="number" id="irrigation_maintenance_cost_kes" min="0" step="any" placeholder="e.g. 20609.32">
+
+      <div class="row">
+        <div>
+          <label for="crop_type">Crop Type</label>
+          <select id="crop_type" required>
+            <option value="">Select crop type</option>
+            <option value="Coffee">Coffee</option>
+            <option value="Dairy">Dairy</option>
+            <option value="Horticulture">Horticulture</option>
+            <option value="Maize">Maize</option>
+            <option value="Tea">Tea</option>
+          </select>
+        </div>
+        <div>
+          <label for="county">County</label>
+          <select id="county" required>
+            <option value="">Select county</option>
+            <option value="Kericho">Kericho</option>
+            <option value="Kiambu">Kiambu</option>
+            <option value="Meru">Meru</option>
+            <option value="Nakuru">Nakuru</option>
+            <option value="Other">Other</option>
+            <option value="Uasin Gishu">Uasin Gishu</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="irrigation_type">Irrigation Type</label>
+          <select id="irrigation_type" required>
+            <option value="">Select irrigation type</option>
+            <option value="Automated">Automated</option>
+            <option value="Drip">Drip</option>
+            <option value="Manual">Manual</option>
+            <option value="None">None</option>
+          </select>
+        </div>
+        <div>
+          <label for="cooperative_member">Cooperative Member</label>
+          <select id="cooperative_member" required>
+            <option value="">Select an option</option>
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn">Predict Annual Farm Income</button>
+    </form>
+
+    <div id="result" role="alert"></div>
+  </main>
+
+  <script>
+    const API_URL = "/api/v1/models/farm-income-regressor/predictions";
+
+    const form = document.getElementById("predictForm");
+    const result = document.getElementById("result");
+    const submitBtn = document.getElementById("submitBtn");
+
+    function getNumber(id) {
+      const value = document.getElementById(id).value.trim();
+      return value === "" ? null : Number(value);
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      result.className = "";
+      result.textContent = "";
+
+      if (!form.checkValidity()) {
+        result.textContent = "Please fill in all fields";
+        result.className = "show err";
+        form.reportValidity();
+        return;
+      }
+
+      const soilQuality = getNumber("soil_quality_score");
+      const irrigationCost = getNumber("irrigation_maintenance_cost_kes");
+
+      const payload = {
+        years_farming_experience: getNumber("years_farming_experience"),
+        soil_quality_score: soilQuality === 0 ? null : soilQuality,
+        num_workers_employed: getNumber("num_workers_employed"),
+        rainfall_mm: getNumber("rainfall_mm"),
+        market_distance_km: getNumber("market_distance_km"),
+        farm_size_acres: getNumber("farm_size_acres"),
+        irrigation_maintenance_cost_kes:
+          irrigationCost === 0 ? null : irrigationCost,
+        crop_type: document.getElementById("crop_type").value,
+        county: document.getElementById("county").value,
+        irrigation_type: document.getElementById("irrigation_type").value,
+        cooperative_member: document.getElementById("cooperative_member").value
+      };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Predicting...";
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || data.message || "Unable to make prediction.");
+        }
+
+        const income = Number(data.predicted_annual_farm_income_kes);
+
+        if (!Number.isFinite(income)) {
+          throw new Error("The API returned an invalid prediction.");
+        }
+
+        result.innerHTML = `
+          <div>Predicted Annual Farm Income</div>
+          <div class="figure">KES ${income.toLocaleString("en-KE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}</div>
+        `;
+        result.className = "show ok";
+
+      } catch (error) {
+        result.textContent = error.message;
+        result.className = "show err";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Predict Annual Farm Income";
+      }
+    });
+  </script>
+</body>
+</html>
