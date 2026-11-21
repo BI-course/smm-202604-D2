@@ -4,10 +4,10 @@ api.py
 A RESTish API, built with Flask, that serves FOUR machine learning artifacts
 produced in earlier labs:
 
-    1. Regression       -- SME monthly revenue prediction
-    2. Classification   -- SME credit risk category
-    3. Clustering       -- Mall customer segment assignment
-    4. Association Rule -- Product recommendation from a cart
+    1. Regression       -- Farm annual income prediction (Ridge)
+    2. Classification   -- Invoice payment risk category (SVC)
+    3. Clustering       -- Cooperative farmer segment assignment (K-Means, k=4)
+    4. Association Rule -- Food delivery item recommendation from a cart
        Mining (ARM)
 
 The point of this file is to show you that a fitted scikit-learn /
@@ -28,6 +28,7 @@ Run this file directly to start a local development server:
 import os
 
 import joblib
+import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -70,213 +71,295 @@ CORS(app, resources={r"/api/*": {"origins": [
 # single API call, which is slow and pointless -- the fitted model never
 # changes while the server is running.
 # -----------------------------------------------------------------------
+
 MODEL_DIR = "./model"
 
+# 1. Regression: Ridge pipeline trained on log1p(annual farm income)
 regression_pipeline = joblib.load(
-    os.path.join(MODEL_DIR, "lasso_regressor_for_sme_revenue.joblib")
+    os.path.join(MODEL_DIR, "20261121_170647_ridge_regressor_for_farm_income.joblib")
 )
 
+# 2. Classification: SVC pipeline (preprocessing + SMOTE + model)
 classification_pipeline = joblib.load(
-    os.path.join(MODEL_DIR, "svc_classifier_for_sme_credit_risk.joblib")
+    os.path.join(MODEL_DIR, "20261121_171040_svc_classifier_for_invoice_risk.joblib")
 )
 
+# 3. Clustering: the scaler and the K-Means model were saved together
 clustering_artifact = joblib.load(
-    os.path.join(MODEL_DIR, "kmeans_mall_customer_segmentation.joblib")
+    os.path.join(MODEL_DIR, "20261121_170750_kmeans_farmer_segmentation.joblib")
 )
 clustering_scaler = clustering_artifact["scaler"]
 clustering_kmeans = clustering_artifact["kmeans"]
+clustering_features = clustering_artifact["features"]
 
+# 4. Association rules: precomputed lookup plus the item catalogue
 arm_artifact = joblib.load(
-    os.path.join(MODEL_DIR, "apriori_recommendation_rules.joblib")
+    os.path.join(MODEL_DIR, "20261121_170352_delivery_recommendation_rules.joblib")
 )
 recommendation_lookup = arm_artifact["recommendation_lookup"]
-sku_lookup = arm_artifact["sku_lookup"]
+item_lookup = arm_artifact["item_lookup"]
 
 print("All the four artifacts have been loaded. The API is ready.")
 
 
-# 1. REGRESSION -- predict monthly revenue (KES) for an SME
+# -----------------------------------------------------------------------
+# Input fields each model expects
+# -----------------------------------------------------------------------
+REGRESSION_NUMERIC = [
+    "years_farming_experience", "soil_quality_score", "num_workers_employed",
+    "rainfall_mm", "market_distance_km", "farm_size_acres",
+    "irrigation_maintenance_cost_kes",
+]
+REGRESSION_CATEGORICAL = ["crop_type", "county", "irrigation_type", "cooperative_member"]
+# The pipeline has its own imputers for numeric columns, so a numeric field
+# may be sent as null (for example irrigation_maintenance_cost_kes for a farm
+# with no irrigation). The field name must still be present in the request.
+# irrigation_type may also be null: the pipeline fills it with "None"
+# (no irrigation), exactly as it did during training.
+REGRESSION_OPTIONAL = REGRESSION_NUMERIC + ["irrigation_type"]
 
-# Sample request (cURL):
-#   curl -X POST http://127.0.0.1:5000/api/v1/models/sme-revenue-regressor/predictions \
+CLASSIFICATION_NUMERIC = [
+    "payment_terms_days", "invoice_amount_kes", "client_relationship_years",
+    "prior_late_payments_count", "discount_offered_pct",
+    "days_outstanding_avg_historical", "guarantee_value_kes",
+    "economic_sector_growth_rate_pct",
+]
+CLASSIFICATION_CATEGORICAL = [
+    "client_industry", "client_credit_rating", "client_company_size",
+    "payment_method", "has_dispute_history", "collateral_or_guarantee",
+]
+# Numeric fields may be null (for example guarantee_value_kes when there is no
+# guarantee). The pipeline imputes them. The field name must still be present.
+CLASSIFICATION_OPTIONAL = CLASSIFICATION_NUMERIC
+
+CLUSTER_NAMES = {
+    0: "Low-access smallholders",
+    1: "Established smallholders with good market access",
+    2: "Commercial farmers",
+    3: "High-value niche farmers",
+}
+
+
+# -----------------------------------------------------------------------
+# Basic error handling helpers
+# -----------------------------------------------------------------------
+def missing_fields(payload, required, optional=()):
+    """Return the required fields that are absent or empty in the payload."""
+    missing = []
+    for field in required:
+        if field in optional:
+            if field not in payload:
+                missing.append(field)
+        elif field not in payload or payload[field] is None or str(payload[field]).strip() == "":
+            missing.append(field)
+    return missing
+
+
+def build_row(payload, numeric, categorical):
+    """Build a one-row DataFrame with numbers as floats (null becomes NaN)."""
+    row = {}
+    for field in numeric:
+        value = payload.get(field)
+        row[field] = np.nan if value is None or value == "" else float(value)
+    for field in categorical:
+        value = payload.get(field)
+        row[field] = np.nan if value is None or value == "" else str(value)
+    return pd.DataFrame([row])
+
+
+def bad_request(message):
+    return jsonify({"error": message}), 400
+
+
+# -----------------------------------------------------------------------
+# 1. REGRESSION -- predict annual farm income (KES)
+# -----------------------------------------------------------------------
+# Sample request (cURL, Git Bash):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/farm-income-regressor/predictions \
 #        -H "Content-Type: application/json" \
-#        -d '{"sector": "Technology", "county": "Nairobi", "quarter": "Q3",
-#             "business_age_years": 4.5, "num_employees": 12,
-#             "owner_education_level": "Secondary",
-#             "monthly_marketing_spend_kes": 45000,
-#             "avg_daily_foot_traffic": null,
-#             "online_presence_score": 78.0, "loan_amount_kes": 250000,
-#             "interest_rate_pct": 14.5, "inflation_rate_pct": 6.5,
-#             "competitor_density": 5, "customer_satisfaction_score": 4.2}'
+#        -d '{"years_farming_experience": 10, "soil_quality_score": 60,
+#             "num_workers_employed": 1, "rainfall_mm": 1345,
+#             "market_distance_km": 5.7, "farm_size_acres": 7.26,
+#             "irrigation_maintenance_cost_kes": 20609.32,
+#             "crop_type": "Tea", "county": "Uasin Gishu",
+#             "irrigation_type": "Drip", "cooperative_member": "No"}'
 #
-# Sample request (PowerShell):
-#   Invoke-RestMethod -Method Post `
-#     -Uri "http://127.0.0.1:5000/api/v1/models/sme-revenue-regressor/predictions" `
-#     -ContentType "application/json" `
-#     -Body (@{sector="Technology"; county="Nairobi"; quarter="Q3";
-#              business_age_years=4.5; num_employees=12;
-#              owner_education_level="Secondary";
-#              monthly_marketing_spend_kes=45000; avg_daily_foot_traffic=$null;
-#              online_presence_score=78.0; loan_amount_kes=250000;
-#              interest_rate_pct=14.5; inflation_rate_pct=6.5;
-#              competitor_density=5; customer_satisfaction_score=4.2} | ConvertTo-Json)
-#
-# Note: avg_daily_foot_traffic is deliberately null for a Technology-sector
-# business (fully online -- foot traffic is structurally not applicable, not
-# missing at random). The pipeline's own imputer handles the null value; nothing
-# in this file needs to know that rule.
-@app.route("/api/v1/models/sme-revenue-regressor/predictions", methods=["POST"])
-def predict_revenue():
-    payload = request.get_json()
+# irrigation_maintenance_cost_kes may be null for a farm with
+# irrigation_type "None". The pipeline's own imputer handles it.
+@app.route("/api/v1/models/farm-income-regressor/predictions", methods=["POST"])
+def predict_farm_income():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return bad_request("Send a JSON object in the request body.")
 
-    # Build a one-row DataFrame straight from the JSON body. No manual
-    # label-encoding, no manual date parsing, no manual column reordering, etc. --
-    # the pipeline's ColumnTransformer already knows which columns it expects
-    # and how to preprocess each one.
-    input_row = pd.DataFrame([payload])
+    missing = missing_fields(
+        payload, REGRESSION_NUMERIC + REGRESSION_CATEGORICAL, REGRESSION_OPTIONAL
+    )
+    if missing:
+        return bad_request("Missing required fields: " + ", ".join(missing))
 
-    predicted_log_revenue = regression_pipeline.predict(input_row)[0]
-    # The pipeline was trained on log1p(revenue) because revenue was
-    # right-skewed; we invert that single transformation here to report the
-    # predictions in KES.
-    import numpy as np
-    predicted_revenue_kes = float(np.expm1(predicted_log_revenue))
+    try:
+        input_row = build_row(payload, REGRESSION_NUMERIC, REGRESSION_CATEGORICAL)
+    except (TypeError, ValueError):
+        return bad_request("Numeric fields must contain numbers: " + ", ".join(REGRESSION_NUMERIC))
+
+    # The model was trained on log1p(income), so expm1 turns it back into KES.
+    predicted_log_income = regression_pipeline.predict(input_row)[0]
+    predicted_income_kes = float(np.expm1(predicted_log_income))
 
     return jsonify({
-        "predicted_monthly_revenue_kes": round(predicted_revenue_kes, 2),
-        "model": "Lasso Regressor",
+        "predicted_annual_farm_income_kes": round(predicted_income_kes, 2),
+        "model": "Ridge Regressor",
     })
 
 
-# 2. CLASSIFICATION -- predict SME credit risk category (Low/Medium/High)
-
-# Sample request (cURL):
-#   curl -X POST http://127.0.0.1:5000/api/v1/models/sme-credit-risk-classifier/predictions \
+# -----------------------------------------------------------------------
+# 2. CLASSIFICATION -- predict invoice payment risk
+# -----------------------------------------------------------------------
+# Sample request (cURL, Git Bash):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/invoice-risk-classifier/predictions \
 #        -H "Content-Type: application/json" \
-#        -d '{"sector": "Retail", "county": "Nairobi", "quarter": "Q2",
-#             "loan_purpose": "Working Capital", "owner_education_level": "Secondary",
-#             "business_age_years": 2.1, "num_employees": 4,
-#             "monthly_revenue_kes": 850000, "loan_amount_kes": 150000,
-#             "loan_term_months": 12, "interest_rate_pct": 16.5,
-#             "collateral_value_kes": null, "debt_to_income_ratio": 0.62,
-#             "credit_score": 590, "num_previous_loans": 1,
-#             "missed_payments_count": 3, "online_presence_score": 40.0,
-#             "customer_satisfaction_score": 3.4, "competitor_density": 6}'
+#        -d '{"client_industry": "Technology", "client_credit_rating": "Good",
+#             "client_company_size": "Large", "payment_method": "Bank Transfer",
+#             "has_dispute_history": "Yes", "collateral_or_guarantee": "No",
+#             "payment_terms_days": 45, "invoice_amount_kes": 256337,
+#             "client_relationship_years": 1.9, "prior_late_payments_count": 1,
+#             "discount_offered_pct": 2.73, "days_outstanding_avg_historical": 22.2,
+#             "guarantee_value_kes": null, "economic_sector_growth_rate_pct": 4.87}'
 #
-#
-# Note: collateral_value_kes is null here because "Working Capital" loans are
-# more often unsecured (structural missingness, not missing at random) --
-# again, the pipeline's imputer + missingness indicator already handles this
-# internally; this route does not need special code for it.
-@app.route("/api/v1/models/sme-credit-risk-classifier/predictions", methods=["POST"])
-def predict_credit_risk():
-    payload = request.get_json()
-    input_row = pd.DataFrame([payload])
+# guarantee_value_kes may be null when collateral_or_guarantee is "No".
+@app.route("/api/v1/models/invoice-risk-classifier/predictions", methods=["POST"])
+def predict_invoice_risk():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return bad_request("Send a JSON object in the request body.")
 
-    predicted_class = classification_pipeline.predict(input_row)[0]
-    predicted_probabilities = classification_pipeline.predict_proba(input_row)[0]
-    class_labels = classification_pipeline.named_steps["model"].classes_
+    missing = missing_fields(
+        payload, CLASSIFICATION_NUMERIC + CLASSIFICATION_CATEGORICAL, CLASSIFICATION_OPTIONAL
+    )
+    if missing:
+        return bad_request("Missing required fields: " + ", ".join(missing))
+
+    try:
+        input_row = build_row(payload, CLASSIFICATION_NUMERIC, CLASSIFICATION_CATEGORICAL)
+    except (TypeError, ValueError):
+        return bad_request("Numeric fields must contain numbers: " + ", ".join(CLASSIFICATION_NUMERIC))
+
+    predicted_class = str(classification_pipeline.predict(input_row)[0])
+    probabilities = classification_pipeline.predict_proba(input_row)[0]
+    class_probabilities = {
+        str(label): round(float(p), 4)
+        for label, p in zip(classification_pipeline.classes_, probabilities)
+    }
 
     return jsonify({
-        "predicted_credit_risk_category": str(predicted_class),
-        "class_probabilities": {
-            str(label): round(float(prob), 4)
-            for label, prob in zip(class_labels, predicted_probabilities)
-        },
-        "model": "Support Vector Classifier (tuned, SMOTE-resampled at training only)",
+        "predicted_payment_risk_category": predicted_class,
+        "class_probabilities": class_probabilities,
+        "model": "Support Vector Classifier (linear kernel, SMOTE)",
     })
 
 
-# 3. CLUSTERING -- assign a new mall customer to an existing segment
-
-# Sample request (cURL):
-#   curl -X POST http://127.0.0.1:5000/api/v1/models/mall-customer-segmenter/predictions \
+# -----------------------------------------------------------------------
+# 3. CLUSTERING -- assign a cooperative farmer to a segment
+# -----------------------------------------------------------------------
+# Sample request (cURL, Git Bash):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/farmer-segmenter/predictions \
 #        -H "Content-Type: application/json" \
-#        -d '{"Age": 27, "Annual Income (k$)": 45, "Spending Score (1-100)": 72}'
-#
-# Note: unlike the two Pipelines above, K-Means does not bundle its own
-# scaler, so this is the one endpoint where the scaling step is applied
-# explicitly (scaler.transform(...) then kmeans.predict(...)) -- exactly the
-# two-object pattern the clustering notebook persisted together for this
-# reason. There is still no manual encoding or feature engineering: the
-# three numeric fields are used exactly as the client sends them.
-@app.route("/api/v1/models/mall-customer-segmenter/predictions", methods=["POST"])
-def predict_customer_segment():
-    payload = request.get_json()
-    input_row = pd.DataFrame([payload])
+#        -d '{"farm_size_acres": 16.29, "annual_yield_tonnes": 35.9,
+#             "income_per_acre_kes": 2000, "years_farming_experience": 7,
+#             "market_access_score": 51.7}'
+@app.route("/api/v1/models/farmer-segmenter/predictions", methods=["POST"])
+def predict_farmer_segment():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return bad_request("Send a JSON object in the request body.")
+
+    missing = missing_fields(payload, clustering_features)
+    if missing:
+        return bad_request("Missing required fields: " + ", ".join(missing))
+
+    try:
+        input_row = build_row(payload, clustering_features, [])
+    except (TypeError, ValueError):
+        return bad_request("All fields must contain numbers: " + ", ".join(clustering_features))
 
     scaled_input = clustering_scaler.transform(input_row)
     assigned_cluster = int(clustering_kmeans.predict(scaled_input)[0])
 
     return jsonify({
         "assigned_cluster": assigned_cluster,
-        "model": "K-Means (k=5, standardized features)",
+        "segment_name": CLUSTER_NAMES.get(assigned_cluster, "Unknown"),
+        "model": "K-Means (k=4, standardised features)",
     })
 
 
-# 4. ASSOCIATION RULE MINING -- recommend products for a shopping cart
+# -----------------------------------------------------------------------
+# 4. ASSOCIATION RULES -- recommend food items for a cart
+# -----------------------------------------------------------------------
+# Item IDs: F01 Beef Burger, F02 French Fries, F03 Soda, F04 Chicken Wings,
+# F05 Margherita Pizza, F06 Garlic Bread, F07 California Roll Sushi,
+# F08 Miso Soup, F09 Green Tea, F10 Chicken Biryani, F11 Raita,
+# F12 Naan Bread, F13 Chapati, F14 Chocolate Cake, F15 Ice Cream
+#
+# Sample request (cURL, Git Bash):
+#   curl -X POST http://127.0.0.1:5000/api/v1/models/delivery-recommender/predictions \
+#        -H "Content-Type: application/json" \
+#        -d '{"cart": ["F01", "F03"]}'
+@app.route("/api/v1/models/delivery-recommender/predictions", methods=["POST"])
+def recommend_items():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return bad_request("Send a JSON object in the request body.")
 
-# Sample request (cURL):
-#   curl -X POST http://127.0.0.1:5000/api/v1/models/ecommerce-recommender/predictions \
-#        -H "Content-Type: application/json" \
-#        -d '{"cart": ["H06", "H07"]}'
-#
-#   curl -X POST http://127.0.0.1:5000/api/v1/models/ecommerce-recommender/predictions \
-#        -H "Content-Type: application/json" \
-#        -d '{"cart": ["P04", "P01"]}'
-#
-# Note: there is no scikit-learn ".predict()" here -- the mined association
-# rules were precomputed into a lookup dictionary
-# (antecedent SKU-set -> ranked candidate consequents)
-# during the notebook's persistence stage. This
-# endpoint performs the exact same lookup+rank step a production recommender
-# microservice would perform on every incoming request; it does not mine
-# for the rules again.
-@app.route("/api/v1/models/ecommerce-recommender/predictions", methods=["POST"])
-def recommend_products():
-    payload = request.get_json()
-    cart = set(payload.get("cart", []))
-    top_n = int(payload.get("top_n", 3))
+    cart_list = payload.get("cart")
+    if not isinstance(cart_list, list) or len(cart_list) == 0:
+        return bad_request('Missing required field: cart (a list of item IDs, e.g. ["F01", "F03"])')
+
+    cart = {str(item).strip().upper() for item in cart_list}
+    unknown = sorted(item for item in cart if item not in item_lookup.index)
+    if unknown:
+        return bad_request("Unknown item IDs: " + ", ".join(unknown))
+
+    try:
+        top_n = int(payload.get("top_n", 3))
+    except (TypeError, ValueError):
+        return bad_request("top_n must be a whole number.")
 
     candidates = {}
     for antecedent, consequent_list in recommendation_lookup.items():
         if antecedent.issubset(cart):
-            for sku, confidence, lift in consequent_list:
-                if sku not in cart:
-                    if sku not in candidates or confidence > candidates[sku][0]:
-                        candidates[sku] = (confidence, lift)
+            for item, confidence, lift in consequent_list:
+                if item not in cart:
+                    if item not in candidates or confidence > candidates[item][0]:
+                        candidates[item] = (confidence, lift)
 
-    ranked = sorted(candidates.items(), key=lambda item: item[1][0], reverse=True)[:top_n]
+    ranked = sorted(candidates.items(), key=lambda x: x[1][0], reverse=True)[:top_n]
     recommendations = [
         {
-            "sku": str(sku),
-            "product_name": sku_lookup.loc[sku, "product_name"],
+            "item_id": str(item),
+            "item_name": str(item_lookup.loc[item, "item_name"]),
             "confidence": round(float(confidence), 3),
             "lift": round(float(lift), 2),
         }
-        for sku, (confidence, lift) in ranked
+        for item, (confidence, lift) in ranked
     ]
 
-    return jsonify({
-        "cart": sorted(cart),
+    response = {
+        "cart": [
+            {"item_id": item, "item_name": str(item_lookup.loc[item, "item_name"])}
+            for item in sorted(cart)
+        ],
         "recommendations": recommendations,
-        "model": "Apriori association rules, cleaned + precomputed lookup",
-    })
+        "model": "Apriori association rules, cleaned and precomputed lookup",
+    }
+    if not recommendations:
+        response["message"] = "No rules match this cart, so there is nothing to recommend."
+    return jsonify(response)
 
 
 # -----------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------
 if __name__ == "__main__":
-    # Development server. debug=True gives auto-reload and an interactive
-    # debugger on errors -- convenient in class, but NEVER use debug=True in
-    # a deployed/public environment (it can expose a remote code execution
-    # console to anyone who can reach the server).
+    # Development server only. Never use debug=True on a public server.
     app.run(debug=True)
-
-    # Production-style alternative (no debugger, no auto-reload):
-    # app.run(debug=False, host="0.0.0.0", port=5000)
-
-    # HTTPS/TLS alternative for local development (requires a self-signed
-    # certificate; see app_server_reverse_proxy_server_setup.md):
-    # app.run(debug=False, ssl_context=("cert.pem", "key.pem"))
