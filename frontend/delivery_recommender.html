@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Recommender</title>
+<style>
+  :root {
+    --accent: #ea580c;
+    --accent-dark: #c2410c;
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok-bg: #fff7ed;
+    --err-bg: #fef2f2;
+    --err-text: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+    max-width: 520px;
+    width: 100%;
+    padding: 32px 32px 28px;
+  }
+  .back-link { display: inline-block; margin-bottom: 16px; color: var(--muted); text-decoration: none; font-size: 14px; }
+  .back-link:hover { color: var(--accent); }
+  .badge {
+    display: inline-block; background: var(--ok-bg); color: var(--accent-dark);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  label .hint { font-weight: 400; color: var(--muted); }
+  input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 14px; background: #fff; color: var(--text);
+  }
+  input:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(234,88,12,0.15);
+  }
+  button {
+    width: 100%; margin-top: 24px; padding: 12px 16px; background: var(--accent);
+    color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { background: #fdba74; cursor: default; }
+  #result { margin-top: 20px; padding: 16px; border-radius: 10px; font-size: 14px; display: none; }
+  #result.show { display: block; }
+  #result.ok { background: var(--ok-bg); color: var(--accent-dark); }
+  #result.err { background: var(--err-bg); color: var(--err-text); }
+  ul.recs { list-style: none; margin: 10px 0 0; padding: 0; }
+  ul.recs li {
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; font-size: 14px;
+  }
+  ul.recs li:last-child { border-bottom: none; }
+  ul.recs .meta { color: var(--muted); font-size: 12px; }
+
+.item-options { border: 0; padding: 0; margin: 16px 0 0; }
+.item-option { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+.item-option input[type="checkbox"] { width: auto; padding: 0; }
+  
+</style>
+</head>
+<body>
+  <div class="card">
+    <a class="back-link" href="index.html">&larr; All endpoints</a>
+    <span class="badge">Association Rules</span>
+    <h1>Delivery Recommender</h1>
+    <p class="lead">Calls <code>POST /api/v1/models/delivery-recommender/predictions</code></p>
+
+    <form id="predictForm" novalidate>
+  <fieldset class="item-options">
+    <legend>Select items in the cart</legend>
+    <label class="item-option"><input type="checkbox" name="cart" value="F01"> F01 — Beef Burger</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F02"> F02 — French Fries</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F03"> F03 — Soda</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F04"> F04 — Chicken Wings</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F05"> F05 — Margherita Pizza</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F06"> F06 — Garlic Bread</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F07"> F07 — California Roll Sushi</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F08"> F08 — Miso Soup</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F09"> F09 — Green Tea</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F10"> F10 — Chicken Biryani</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F11"> F11 — Raita</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F12"> F12 — Naan Bread</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F13"> F13 — Chapati</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F14"> F14 — Chocolate Cake</label>
+    <label class="item-option"><input type="checkbox" name="cart" value="F15"> F15 — Ice Cream</label>
+  </fieldset>
+
+  <button type="submit" id="submitBtn">Get Recommendations</button>
+</form>
+
+    <div id="result"></div>
+  </div>
+  <script>
+const API_URL = "/api/v1/models/delivery-recommender/predictions";
+
+document.getElementById("predictForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const result = document.getElementById("result");
+  const submitBtn = document.getElementById("submitBtn");
+  const cart = [...document.querySelectorAll('input[name="cart"]:checked')]
+    .map(input => input.value);
+
+  if (cart.length === 0) {
+    result.className = "show err";
+    result.textContent = "Please fill in all fields";
+    return;
+  }
+
+  submitBtn.disabled = true;
+  result.className = "";
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cart })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Request failed (${response.status})`);
+    }
+
+    if (data.recommendations.length === 0) {
+      result.className = "show ok";
+      result.textContent = data.message;
+    } else {
+      const items = data.recommendations.map(item => `
+        <li>
+          <span>${item.item_name}</span>
+          <span class="meta">Confidence: ${item.confidence} · Lift: ${item.lift}</span>
+        </li>
+      `).join("");
+
+      result.className = "show ok";
+      result.innerHTML = `<ul class="recs">${items}</ul>`;
+    }
+  } catch (error) {
+    result.className = "show err";
+    result.textContent = error.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>
