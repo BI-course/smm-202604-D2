@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SME Credit Risk Classifier</title>
+<style>
+  :root {
+    --accent: #0891b2;
+    --accent-dark: #0e7490;
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok-bg: #ecfeff;
+    --err-bg: #fef2f2;
+    --err-text: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+    max-width: 560px;
+    width: 100%;
+    padding: 32px 32px 28px;
+  }
+  .back-link { display: inline-block; margin-bottom: 16px; color: var(--muted); text-decoration: none; font-size: 14px; }
+  .back-link:hover { color: var(--accent); }
+  .badge {
+    display: inline-block; background: var(--ok-bg); color: var(--accent-dark);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  label .hint { font-weight: 400; color: var(--muted); }
+  input, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 14px; background: #fff; color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8,145,178,0.15);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button {
+    width: 100%; margin-top: 24px; padding: 12px 16px; background: var(--accent);
+    color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s ease;
+  }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { background: #7dd3e8; cursor: default; }
+  #result { margin-top: 20px; padding: 16px; border-radius: 10px; font-size: 14px; display: none; }
+  #result.show { display: block; }
+  #result.ok { background: var(--ok-bg); color: var(--accent-dark); }
+  #result.err { background: var(--err-bg); color: var(--err-text); }
+  #result .figure { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .prob-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; }
+  .prob-bar .track { flex: 1; height: 6px; background: #d1f5fb; border-radius: 3px; overflow: hidden; }
+  .prob-bar .fill { height: 100%; background: var(--accent); }
+</style>
+
+</head>
+<body>
+  <div class="card">
+    <a class="back-link" href="index.html">&larr; All endpoints</a>
+    <span class="badge">Classification</span>
+    <h1>Invoice Payment Risk Classifier</h1>
+    <p class="lead">Predicts the payment risk category for a client invoice using the Support Vector Classifier.</p>
+
+    <form id="predictForm">
+      <div class="row">
+        <div>
+          <label for="client_industry">Client Industry</label>
+          <select id="client_industry" required>
+            <option value="">Select industry</option>
+            <option>Construction</option><option>Healthcare</option>
+            <option>Manufacturing</option><option>Retail</option><option>Technology</option>
+          </select>
+        </div>
+        <div>
+          <label for="client_credit_rating">Client Credit Rating</label>
+          <select id="client_credit_rating" required>
+            <option value="">Select rating</option>
+            <option>Poor</option><option>Fair</option><option>Good</option><option>Excellent</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="client_company_size">Client Company Size</label>
+          <select id="client_company_size" required>
+            <option value="">Select company size</option>
+            <option>Small</option><option>Medium</option><option>Large</option><option>Enterprise</option>
+          </select>
+        </div>
+        <div>
+          <label for="payment_method">Payment Method</label>
+          <select id="payment_method" required>
+            <option value="">Select payment method</option>
+            <option>Bank Transfer</option><option>Cheque</option>
+            <option>Letter of Credit</option><option>Mobile Money</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="has_dispute_history">Dispute History</label>
+          <select id="has_dispute_history" required>
+            <option value="">Select an option</option>
+            <option>No</option><option>Yes</option>
+          </select>
+        </div>
+        <div>
+          <label for="collateral_or_guarantee">Collateral or Guarantee</label>
+          <select id="collateral_or_guarantee" required>
+            <option value="">Select an option</option>
+            <option>No</option><option>Yes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="payment_terms_days">Payment Terms (Days)</label>
+          <input type="number" id="payment_terms_days" min="0" step="1" placeholder="e.g. 45" required>
+        </div>
+        <div>
+          <label for="invoice_amount_kes">Invoice Amount (KES)</label>
+          <input type="number" id="invoice_amount_kes" min="0" step="0.01" placeholder="e.g. 256337" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="client_relationship_years">Client Relationship (Years)</label>
+          <input type="number" id="client_relationship_years" min="0" step="0.1" placeholder="e.g. 1.9" required>
+        </div>
+        <div>
+          <label for="prior_late_payments_count">Previous Late Payments</label>
+          <input type="number" id="prior_late_payments_count" min="0" step="1" placeholder="e.g. 1" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="discount_offered_pct">Discount Offered (%)</label>
+          <input type="number" id="discount_offered_pct" step="0.01" placeholder="e.g. 2.73" required>
+        </div>
+        <div>
+          <label for="days_outstanding_avg_historical">Average Historical Days Outstanding</label>
+          <input type="number" id="days_outstanding_avg_historical" min="0" step="0.1" placeholder="e.g. 22.2" required>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="guarantee_value_kes">Guarantee Value (KES) <span class="hint">(blank if no guarantee)</span></label>
+          <input type="number" id="guarantee_value_kes" min="0" step="0.01" placeholder="e.g. 100000">
+        </div>
+        <div>
+          <label for="economic_sector_growth_rate_pct">Economic Sector Growth Rate (%)</label>
+          <input type="number" id="economic_sector_growth_rate_pct" step="0.01" placeholder="e.g. 4.87" required>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn">Predict Payment Risk</button>
+    </form>
+
+    <div id="result" role="status" aria-live="polite"></div>
+  </div>
+
+<script>
+  const API_URL = "/api/v1/models/invoice-risk-classifier/predictions";
+
+  document.getElementById("predictForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const form = document.getElementById("predictForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const result = document.getElementById("result");
+
+    if (!form.checkValidity()) {
+      result.className = "show err";
+      result.textContent = "Please fill in all fields.";
+      form.reportValidity();
+      return;
+    }
+
+    const numberValue = (id) => {
+      const value = document.getElementById(id).value.trim();
+      return value === "" ? null : Number(value);
+    };
+
+    const payload = {
+      client_industry: document.getElementById("client_industry").value,
+      client_credit_rating: document.getElementById("client_credit_rating").value,
+      client_company_size: document.getElementById("client_company_size").value,
+      payment_method: document.getElementById("payment_method").value,
+      has_dispute_history: document.getElementById("has_dispute_history").value,
+      collateral_or_guarantee: document.getElementById("collateral_or_guarantee").value,
+      payment_terms_days: numberValue("payment_terms_days"),
+      invoice_amount_kes: numberValue("invoice_amount_kes"),
+      client_relationship_years: numberValue("client_relationship_years"),
+      prior_late_payments_count: numberValue("prior_late_payments_count"),
+      discount_offered_pct: numberValue("discount_offered_pct"),
+      days_outstanding_avg_historical: numberValue("days_outstanding_avg_historical"),
+      guarantee_value_kes: numberValue("guarantee_value_kes"),
+      economic_sector_growth_rate_pct: numberValue("economic_sector_growth_rate_pct")
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Predicting...";
+    result.className = "";
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Server responded ${response.status}: ${text.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+
+      const probRows = Object.entries(data.class_probabilities)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, prob]) => `
+          <div class="prob-bar">
+            <span style="width:90px;">${label}</span>
+            <div class="track"><div class="fill" style="width:${(prob * 100).toFixed(0)}%"></div></div>
+            <span>${(prob * 100).toFixed(1)}%</span>
+          </div>`).join("");
+
+      result.className = "show ok";
+      result.innerHTML =
+        `Model: ${data.model}` +
+        `<div class="figure">${data.predicted_payment_risk_category}</div>` +
+        `<p>Class probabilities:</p>` +
+        probRows;
+
+    } catch (err) {
+      result.className = "show err";
+      result.textContent = "Request failed: " + err.message;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Predict Payment Risk";
+    }
+  });
+</script>
+</body>
+</html>
