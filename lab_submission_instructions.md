@@ -8,45 +8,65 @@
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        |169388             |
+| **Name**                                                                                                                              |Laura Chetalam             |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |**My contribution:** I updated the Flask API (`api.py`) to work with our four new machine learning models: Farm Income Regressor, Invoice Risk Classifier, Farmer Segmenter and Delivery Recommender. I replaced the old model files with the new trained models and updated the required library versions to ensure they loaded correctly. I also tested all four API endpoints using `curl` commands to confirm that they returned the expected predictions and recommendations. Additionally, I tested how the API handles missing inputs and confirmed that it returns the correct HTTP 400 error. I pushed my changes to GitHub, merged them into the main branch through a Pull Request, and helped coordinate the group's contributions.
+
+**Link to my branch:** https://github.com/BI-course/smm-202604-D2/tree/feature/Laura-sandbox
+
+**What I learned:** I learned how to connect trained machine learning models to a Flask API, test different endpoints, and handle errors when users provide incomplete information. I also gained a better understanding of managing Python dependencies, working with Git branches and Pull Requests, and combining different group members' work into one project.             |
 
 **Member 2:**
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        |152569             |
+| **Name**                                                                                                                              |Patriciah Mbua             |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |**My contribution**: Rewrote the Hugging Face Gradio app (huggingface-spaces-using-gradio/app.py) for our four models: farm income regressor, invoice risk classifier, farmer segmenter and delivery recommender, with dropdowns using the allowed values from section 4. Fixed two bugs: Gradio sends whole numbers as integers, so I convert numeric inputs to floats before predicting, and I pinned mlxtend==0.23.4 in the Space's requirements so it works with scikit-learn 1.6.1. Deployed it as a public Hugging Face Space (ZeroGPU hardware, because CPU basic needs a paid plan) and made one prediction on each tab. Tested the classification endpoint locally. It returned On-Time, as expected. Merged my changes into main through Pull Requests.
+
+**Link to my branch**: https://github.com/BI-course/smm-202604-D2/tree/feature/Patriciah-sandbox
+
+**One thing I learnt**: Hugging Face doesn't read our constraints.txt, so a package version that works on my laptop can still fail on the Space. The versions have to be right in the app's own requirements.txt.             |
 
 **Member 3:**
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        |167253             |
+| **Name**                                                                                                                              |Sandra Mbithi             |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |**What I did**: Rewrote the Streamlit app to use our four group models (regression, classification, clustering and recommender), fixed the mlxtend version in requirements and deployed it on Streamlit Community Cloud.
+
+**Branch link**: https://github.com/BI-course/smm-202604-D2/tree/feature/Sandra-sandbox
+
+**What I learnt**: Library versions must match the version the models were saved with, otherwise the models will not load.             |
 
 **Member 4:**
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        | 153845             |
+| **Name**                                                                                                                              | Grace Wambugu             |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |**My contribution**: I worked on the Farmer Segmenter and Delivery Recommender pages, updated the model demo links, and created the Farm Income Regressor and Invoice Risk Classifier pages. I also tested the recommender endpoint and confirmed that the Farmer Segmenter and Delivery Recommender display results.
+
+**Link to my branch**: https://github.com/BI-course/smm-202604-D2/tree/feature/Grace-sandbox
+
+**What I learned**: I learned how frontend pages send input to model APIs and display the responses, including recommendations and predictions.             |
 
 **Member 5:**
 
 | **Details**                                                                                                                           | **Comment** |
 |:--------------------------------------------------------------------------------------------------------------------------------------|:------------|
-| **Student ID**                                                                                                                        |             |
-| **Name**                                                                                                                              |             |
-| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |             |
+| **Student ID**                                                                                                                        |168330             |
+| **Name**                                                                                                                              | Nicole Monari             |
+| **What part of the lab did you personally<br/>contribute to (provide a link to the<br/>branch(es)), and what did you learn from it?** |**My contribution**: My contribution to the lab involved setting up Docker, Gunicorn and Nginx to run the application. I also deployed the group’s API to Render and tested all four model endpoints to make sure they were working. Additionally, I developed the regression and classification HTML pages (farm_income_regressor.html and invoice_risk_classifier.html) and added required-field validation to the forms.
+
+**Link to my branch**: https://github.com/BI-course/smm-202604-D2/tree/feature/Nicole-sandbox
+
+**What I learned**: Through this lab, I learned how to use Docker to run an application in containers, how Gunicorn and Nginx work together and how to deploy an API to Render. I also learned how to test API endpoints using POST requests and connect HTML forms to backend endpoints to display predictions.             |
 
 ## Chosen Level of Difficulty
 
-**Specify the chosen level of difficulty** (baseline, intermediate, or advanced):
+**Specify the chosen level of difficulty** (baseline, intermediate, or advanced): **Advanced**
 
 ## Video Demonstration
 
@@ -62,7 +82,7 @@ At minimum, the video must show, in one continuous walkthrough:
 
 Note that you are required to submit the link to the video and NOT the video itself. The video should NOT be uploaded to your repository—that would be a misuse of GitHub.
 
-**Link to the video:**
+**Link to the video:** https://youtu.be/arvmxT-_dHU
 
 ## Public URLs
 
@@ -70,9 +90,9 @@ Fill in only the rows that apply to your chosen difficulty level (see Part C bel
 
 | **Deployment target**                             | **URL** |
 |:--------------------------------------------------|:--------|
-| Render (the full `api.py`, all endpoints)         |         |
-| Hugging Face Space (Gradio, one tab per model)    |         |
-| Streamlit Community Cloud app (one tab per model) |         |
+| Render (the full `api.py`, all endpoints)         |https://smm-202604-d2.onrender.com         |
+| Hugging Face Space (Gradio, one tab per model)    |https://huggingface.co/spaces/Patriciah1/smm-202604-d2-models         |
+| Streamlit Community Cloud app (one tab per model) |https://smm-202604-d2.streamlit.app/         |
 
 ---
 
